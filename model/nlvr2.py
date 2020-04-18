@@ -113,7 +113,7 @@ class UniterForNlvr2PairedAttn(UniterPreTrainedModel):
     """ Finetune UNITER for NLVR2
         (paired format with additional attention layer)
     """
-    def __init__(self, config, img_dim):
+    def __init__(self, config, img_dim, refine=True):
         super().__init__(config)
         self.uniter = UniterModel(config, img_dim)
         self.attn1 = MultiheadAttention(config.hidden_size,
@@ -129,6 +129,13 @@ class UniterForNlvr2PairedAttn(UniterPreTrainedModel):
         self.attn_pool = AttentionPool(config.hidden_size,
                                        config.attention_probs_dropout_prob)
         self.nlvr2_output = nn.Linear(2*config.hidden_size, 2)
+
+        self.refine = refine
+        if self.refine is True:
+            self.refine1 = nn.Linear(2, config.hidden_size)
+            self.refine2 = nn.Linear(config.hidden_size, config.hidden_size)
+            self.refine3 = nn.Linear(config.hidden_size, config.hidden_size)
+            self.refine_output = nn.Linear(config.hidden_size, 2)
         self.apply(self.init_weights)
 
     def init_type_embedding(self):
@@ -173,9 +180,20 @@ class UniterForNlvr2PairedAttn(UniterPreTrainedModel):
         answer_scores = self.nlvr2_output(
             torch.cat([left_out, right_out], dim=-1))
 
+        if self.refine is True:
+            refine_proj1 = self.refine1(answer_scores)
+            refine_proj2 = self.refine2(refine_proj1)
+            refine_proj3 = self.refine3(refine_proj2)
+            refined_scores = self.refine_output(refine_proj3) + answer_scores
+
         if compute_loss:
             nlvr2_loss = F.cross_entropy(
                 answer_scores, targets, reduction='none')
-            return nlvr2_loss
+            if self.refine is True:
+                refine_loss = F.cross_entropy(
+                    refined_scores, targets, reduction='none')
+                return nlvr2_loss + refine_loss
+            else:
+                return nlvr2_loss
         else:
-            return answer_scores
+            return refined_scores if self.refine is True else answer_scores
