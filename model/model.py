@@ -17,6 +17,8 @@ from apex.normalization.fused_layer_norm import FusedLayerNorm
 
 from .layer import BertLayer, BertPooler
 
+from pdb import set_trace as bp
+
 
 logger = logging.getLogger(__name__)
 

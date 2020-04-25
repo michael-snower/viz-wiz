@@ -11,10 +11,16 @@ from os.path import exists
 
 from cytoolz import curry
 from tqdm import tqdm
+import numpy as np
 from pytorch_pretrained_bert import BertTokenizer
 
 from data.data import open_lmdb
 
+# import mask rcnn modules
+import sys
+sys.path.append('maskrcnn/')
+from maskrcnn_benchmark.config import cfg
+from maskrcnn.demo.predictor import COCODemo
 
 @curry
 def bert_tokenize(tokenizer, text):
@@ -51,6 +57,73 @@ def process_nlvr2(jsonl, db, tokenizer, missing=None):
         db[id_] = example
     return id2len, txt2img
 
+def extract_visual_features(img, visual_model):
+    vis, bbox, features = visual_model.run_on_opencv_image(img)
+    # visualize vis
+    bp()
+    return features
+
+def process_vizwiz(ann, tokenizer, image_dir, output_dir):
+
+    id2len = {}
+    text2img = {}
+    visual_features_dir = os.path.join(output_dir, "visual_features")
+    if not os.path.exists(visual_features_dir):
+        os.mkdir(visual_features_dir)
+    questions_tokens_dir = os.path.join(output_dir, "question_tokens")
+    if not os.path.exists(questions_tokens_dir):
+        os.mkdir(questions_tokens_dir)
+    answer_tokens_dir = os.path.join(output_dir, "answer_tokens")
+    if not os.path.exists(answer_tokens_dir):
+        os.mkdir(answer_tokens_dir)
+
+    # load visual feature extractor
+    config_file = "maskrcnn/configs/caffe2/e2e_mask_rcnn_R_50_FPN_1x_caffe2.yaml"
+    cfg.merge_from_file(config_file)
+    cfg.merge_from_list(["MODEL.MASK_ON", False])
+    visual_model = COCODemo(cfg, confidence_threshold=0.2)
+
+    print("Saving features and tokens to {}".format(output_dir))
+
+    for example_index, example in enumerate(tqdm(ann, desc=f"Processing VizWiz")):
+
+        # save visual features
+        img_name = example["image"]
+        img = cv.imread(os.path.join(image_dir, img_name))
+        visual_features = extract_visual_features(img, visual_model)
+        vis_feat_save_path = os.path.join(visual_features_dir, img_name)
+        np.save(open(vis_feat_save_path, "wb"), visual_features)
+        bp()
+
+        # tokenize question
+        question_tokens = tokenizer(example["question"])
+        quest_tok_save_path = os.path.join(questions_tokens_dir, img_name)
+        np.save(open(question_save_path, "wb"), question_tokens)
+        bp()
+
+        # tokenize answers
+        answers_text = example["answers"]
+        answers_tok = [tokenizer(answer_text) for answer_text in answers_text]
+        max_answer_len = max([len(answer_tok) for answer_tok in answers_tok])
+        assert max_answer_len > 0
+        max_answer_len = 2 if max_answer_len < 2 else max_answer_len
+        answers_tok_np = np.zeros((len(answers_tok) + 1, max_answer_len), dtype=np.int32)
+        # add in other label information for answer in first row
+        answers_tok_np[0][0] = example["answerable"]
+        if answer_type == "unanswerable":
+            answers_tok_np[0][1] = 0
+        elif answer_type == "yes/no":
+            answers_tok_np[0][1] = 1
+        elif answer_type == "other":
+            answers_tok_np[0][1] = 2
+        else:
+            raise ValueError("Unidentified answer type")
+        for answer_tok, row_index in zip(answers_tok, range(1, len(answers_tok_np))):
+            answers_tok_np[row_index, :len(answer_tok)] = answer_tok
+        answer_tok_save_path = os.path.join(answer_tokens_dir, answers_tok_np)
+        np.save(open(answer_tok_save_path, "wb"), answers_tok_np)
+        bp()
+
 
 def main(opts):
     if not exists(opts.output):
@@ -58,7 +131,7 @@ def main(opts):
     else:
         raise ValueError('Found existing DB. Please explicitly remove '
                          'for re-processing')
-    meta = vars(opts)
+    meta = vars(opts) 
     meta['tokenizer'] = opts.toker
     toker = BertTokenizer.from_pretrained(
         opts.toker, do_lower_case='uncased' in opts.toker)
@@ -72,30 +145,53 @@ def main(opts):
     with open(f'{opts.output}/meta.json', 'w') as f:
         json.dump(vars(opts), f, indent=4)
 
-    open_db = curry(open_lmdb, opts.output, readonly=False)
-    with open_db() as db:
-        with open(opts.annotation) as ann:
-            if opts.missing_imgs is not None:
-                missing_imgs = set(json.load(open(opts.missing_imgs)))
-            else:
-                missing_imgs = None
-            id2lens, txt2img = process_nlvr2(ann, db, tokenizer, missing_imgs)
+    if opts.dataset == "nvlr2":
+        open_db = curry(open_lmdb, opts.output, readonly=False)
+        with open_db() as db:
+                with open(opts.annotation) as ann:
+                        if opts.missing_imgs is not None:
+                            missing_imgs = set(json.load(open(opts.missing_imgs)))
+                        else:
+                            missing_imgs = None
+                        id2lens, txt2img = process_nlvr2(ann, db, tokenizer, missing_imgs)
 
-    with open(f'{opts.output}/id2len.json', 'w') as f:
-        json.dump(id2lens, f)
-    with open(f'{opts.output}/txt2img.json', 'w') as f:
-        json.dump(txt2img, f)
+        with open(f'{opts.output}/id2len.json', 'w') as f:
+            json.dump(id2lens, f)
+        with open(f'{opts.output}/txt2img.json', 'w') as f:
+            json.dump(txt2img, f)
+    else:
+        train_ann_path = os.path.join(opts.annotation, "train.json")
+        train_img_dir = os.path.join(opts.img_dir, "train")
+        train_output_dir = f'{opts.output}/train/'
+        with open(train_ann_path) as ann:
+            id2lens, txt2img = process_vizwiz(ann, tokenizer, train_img_dir, train_output_dir)
+            with open(f'{train_output_dir}/id2len.json', 'w') as f:
+                json.dump(id2lens, f)
+            with open(f'{train_output_dir}/txt2img.json', 'w') as f:
+                json.dump(txt2img, f)
+
+        val_ann_path = os.path.join(opts.annotation, "val.json")
+        val_img_dir = os.path.join(opts.img_dir, "val")
+        val_output_dir = f'{opts.output}/val/'
+        with open(val_ann_path) as ann:
+            id2lens, txt2img = process_vizwiz(ann, tokenizer, val_img_dir, val_output_dir)
+            with open(f'{val_output_dir}/id2len.json', 'w') as f:
+                json.dump(id2lens, f)
+            with open(f'{val_output_dir}/txt2img.json', 'w') as f:
+                json.dump(txt2img, f)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--annotation', required=True,
                         help='annotation JSON')
+    parser.add_argument("--img_dir", required=True, help="img dir")
     parser.add_argument('--missing_imgs',
                         help='some training image features are corrupted')
     parser.add_argument('--output', required=True,
                         help='output dir of DB')
     parser.add_argument('--toker', default='bert-base-cased',
                         help='which BERT tokenizer to used')
+    parser.add_argument("--dataset", default="vizwiz")
     args = parser.parse_args()
     main(args)
