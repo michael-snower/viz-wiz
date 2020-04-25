@@ -105,13 +105,14 @@ def process_vizwiz(ann, tokenizer, image_dir, output_dir):
 
         # tokenize answers
         answers_text = example["answers"]
-        answers_tok = [tokenizer(answer_text) for answer_text in answers_text]
+        answers_tok = [tokenizer(answer_text["answer"]) for answer_text in answers_text]
         max_answer_len = max([len(answer_tok) for answer_tok in answers_tok])
         assert max_answer_len > 0
         max_answer_len = 2 if max_answer_len < 2 else max_answer_len
-        answers_tok_np = np.zeros((len(answers_tok) + 1, max_answer_len), dtype=np.int32)
+        answers_tok_np = -np.ones((len(answers_tok) + 1, max_answer_len), dtype=np.int32)
         # add in other label information for answer in first row
         answers_tok_np[0][0] = example["answerable"]
+        answer_type = example["answer_type"]
         if answer_type == "unanswerable":
             answers_tok_np[0][1] = 0
         elif answer_type == "yes/no":
@@ -124,7 +125,6 @@ def process_vizwiz(ann, tokenizer, image_dir, output_dir):
             answers_tok_np[row_index, :len(answer_tok)] = answer_tok
         answer_tok_save_path = os.path.join(answer_tokens_dir, img_name + ".npy")
         np.save(open(answer_tok_save_path, "wb"), answers_tok_np)
-        bp()
 
 def main(opts):
     if not exists(opts.output):
