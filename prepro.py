@@ -13,6 +13,7 @@ from cytoolz import curry
 from tqdm import tqdm
 import numpy as np
 from pytorch_pretrained_bert import BertTokenizer
+import cv2 as cv
 
 from data.data import open_lmdb
 
@@ -21,6 +22,8 @@ import sys
 sys.path.append('maskrcnn/')
 from maskrcnn_benchmark.config import cfg
 from maskrcnn.demo.predictor import COCODemo
+
+from pdb import set_trace as bp
 
 @curry
 def bert_tokenize(tokenizer, text):
@@ -59,11 +62,12 @@ def process_nlvr2(jsonl, db, tokenizer, missing=None):
 
 def extract_visual_features(img, visual_model):
     vis, bbox, features = visual_model.run_on_opencv_image(img)
-    # visualize vis
-    bp()
-    return features
+    return features, vis
 
 def process_vizwiz(ann, tokenizer, image_dir, output_dir):
+
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
 
     id2len = {}
     text2img = {}
@@ -83,16 +87,15 @@ def process_vizwiz(ann, tokenizer, image_dir, output_dir):
     cfg.merge_from_list(["MODEL.MASK_ON", False])
     visual_model = COCODemo(cfg, confidence_threshold=0.2)
 
-    print("Saving features and tokens to {}".format(output_dir))
-
-    for example_index, example in enumerate(tqdm(ann, desc=f"Processing VizWiz")):
+    for example_index, example in enumerate(tqdm(ann, desc=f"Saving features and tokens to {output_dir}")):
 
         # save visual features
         img_name = example["image"]
         img = cv.imread(os.path.join(image_dir, img_name))
-        visual_features = extract_visual_features(img, visual_model)
+        visual_features, vis = extract_visual_features(img, visual_model)
         vis_feat_save_path = os.path.join(visual_features_dir, img_name)
         np.save(open(vis_feat_save_path, "wb"), visual_features)
+        cv.imwrite(img_name, vis)
         bp()
 
         # tokenize question
@@ -124,13 +127,12 @@ def process_vizwiz(ann, tokenizer, image_dir, output_dir):
         np.save(open(answer_tok_save_path, "wb"), answers_tok_np)
         bp()
 
-
 def main(opts):
     if not exists(opts.output):
         os.makedirs(opts.output)
-    else:
-        raise ValueError('Found existing DB. Please explicitly remove '
-                         'for re-processing')
+    # else:
+    #     raise ValueError('Found existing DB. Please explicitly remove '
+    #                      'for re-processing')
     meta = vars(opts) 
     meta['tokenizer'] = opts.toker
     toker = BertTokenizer.from_pretrained(
@@ -163,22 +165,18 @@ def main(opts):
         train_ann_path = os.path.join(opts.annotation, "train.json")
         train_img_dir = os.path.join(opts.img_dir, "train")
         train_output_dir = f'{opts.output}/train/'
-        with open(train_ann_path) as ann:
-            id2lens, txt2img = process_vizwiz(ann, tokenizer, train_img_dir, train_output_dir)
-            with open(f'{train_output_dir}/id2len.json', 'w') as f:
-                json.dump(id2lens, f)
-            with open(f'{train_output_dir}/txt2img.json', 'w') as f:
-                json.dump(txt2img, f)
+
+        with open(train_ann_path, "r") as ann_file:
+            ann = json.load(ann_file)
+            process_vizwiz(ann, tokenizer, train_img_dir, train_output_dir)
 
         val_ann_path = os.path.join(opts.annotation, "val.json")
         val_img_dir = os.path.join(opts.img_dir, "val")
         val_output_dir = f'{opts.output}/val/'
-        with open(val_ann_path) as ann:
-            id2lens, txt2img = process_vizwiz(ann, tokenizer, val_img_dir, val_output_dir)
-            with open(f'{val_output_dir}/id2len.json', 'w') as f:
-                json.dump(id2lens, f)
-            with open(f'{val_output_dir}/txt2img.json', 'w') as f:
-                json.dump(txt2img, f)
+
+        with open(val_ann_path) as ann_file:
+            ann = json.load(ann_file)
+            process_vizwiz(ann, tokenizer, val_img_dir, val_output_dir)
 
 
 if __name__ == '__main__':
