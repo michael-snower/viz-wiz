@@ -90,19 +90,18 @@ def process_vizwiz(ann, tokenizer, image_dir, output_dir):
     for example_index, example in enumerate(tqdm(ann, desc=f"Saving features and tokens to {output_dir}")):
 
         # save visual features
-        img_name = example["image"]
-        img = cv.imread(os.path.join(image_dir, img_name))
+        img_name_with_ext = example["image"]
+        img_name = img_name_with_ext.split(".")[0]
+        img = cv.imread(os.path.join(image_dir, img_name_with_ext))
         visual_features, vis = extract_visual_features(img, visual_model)
-        vis_feat_save_path = os.path.join(visual_features_dir, img_name)
+        vis_feat_save_path = os.path.join(visual_features_dir, img_name + ".npy")
         np.save(open(vis_feat_save_path, "wb"), visual_features)
-        cv.imwrite(img_name, vis)
-        bp()
+        cv.imwrite(img_name_with_ext, vis)
 
         # tokenize question
         question_tokens = tokenizer(example["question"])
-        quest_tok_save_path = os.path.join(questions_tokens_dir, img_name)
-        np.save(open(question_save_path, "wb"), question_tokens)
-        bp()
+        quest_tok_save_path = os.path.join(questions_tokens_dir, img_name + ".npy")
+        np.save(open(quest_tok_save_path, "wb"), question_tokens)
 
         # tokenize answers
         answers_text = example["answers"]
@@ -123,7 +122,7 @@ def process_vizwiz(ann, tokenizer, image_dir, output_dir):
             raise ValueError("Unidentified answer type")
         for answer_tok, row_index in zip(answers_tok, range(1, len(answers_tok_np))):
             answers_tok_np[row_index, :len(answer_tok)] = answer_tok
-        answer_tok_save_path = os.path.join(answer_tokens_dir, answers_tok_np)
+        answer_tok_save_path = os.path.join(answer_tokens_dir, img_name + ".npy")
         np.save(open(answer_tok_save_path, "wb"), answers_tok_np)
         bp()
 
