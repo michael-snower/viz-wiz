@@ -86,7 +86,7 @@ class VizWizModel(UniterPreTrainedModel):
                 attn_masks, gather_index, answerable_targets,
                 img_type_ids=None, img_pos_feat=None, compute_loss=True):
 
-        sequence_output = self.uniter(
+        sequence_output, embedding_output = self.uniter(
             input_ids=input_ids, 
             position_ids=position_ids,
             img_feat=img_feat, 
@@ -101,13 +101,13 @@ class VizWizModel(UniterPreTrainedModel):
         hidden_state = self.fc2(hidden_state)
 
         # answerable head
-        inverse_attn_masks = attn_masks == 0
-        answerable_attn, _ = self.answerable_attn(
-            query=hidden_state, 
-            key=hidden_state,
-            value=hidden_state
-        )
-        answerable_pool = self.answerable_pool(answerable_attn)
+        #inverse_attn_masks = attn_masks == 0
+        #answerable_attn, _ = self.answerable_attn(
+        #    query=hidden_state, 
+        #    key=hidden_state,
+        #    value=hidden_state
+        #)
+        answerable_pool = self.answerable_pool(sequence_output)
         answerable_logits = self.answerable_output(answerable_pool)
 
         if compute_loss is True:

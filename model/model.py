@@ -366,4 +366,4 @@ class UniterModel(UniterPreTrainedModel):
             output_all_encoded_layers=output_all_encoded_layers)
         if not output_all_encoded_layers:
             encoded_layers = encoded_layers[-1]
-        return encoded_layers
+        return encoded_layers, embedding_output
