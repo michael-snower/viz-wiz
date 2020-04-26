@@ -47,8 +47,6 @@ def main(opts):
     set_random_seed(opts.seed)
 
     LOGGER.info("Loading data from {}".format(opts.data_dir))
-    train_data_dir = os.path.join(opts.data_dir, "train")
-    val_data_dir = os.path.join(opts.data_dir, "val")
 
     # create datasets
     train_set = VizWizDataset(train_data_dir, split="train")
