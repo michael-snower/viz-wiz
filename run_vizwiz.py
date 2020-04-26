@@ -83,12 +83,12 @@ def main(opts):
 
     # Prepare optimizer
     optimizer = build_optimizer(model, opts)
-    model, optimizer = amp.initialize(model, optimizer,
-                                      enabled=opts.fp16, opt_level='O2')
+    # model, optimizer = amp.initialize(model, optimizer,
+    #                                   enabled=opts.fp16, opt_level='O2')
 
     # setup logging
     save_training_meta(opts)
-    TB_LOGGER.create(join(opts.output_dir, 'log'))
+    #TB_LOGGER.create(join(opts.output_dir, 'log'))
     pbar = tqdm(total=opts.num_train_steps)
     model_saver = ModelSaver(join(opts.output_dir, 'ckpt'))
     if not os.path.exists(join(opts.output_dir, 'results')):
@@ -135,10 +135,11 @@ def main(opts):
             )
             loss = loss.mean()
 
-            delay_unscale = (step+1) % opts.gradient_accumulation_steps != 0
-            with amp.scale_loss(loss, optimizer, delay_unscale=delay_unscale
-                                ) as scaled_loss:
-                scaled_loss.backward()
+            # delay_unscale = (step+1) % opts.gradient_accumulation_steps != 0
+            # with amp.scale_loss(loss, optimizer, delay_unscale=delay_unscale
+            #                     ) as scaled_loss:
+            #     scaled_loss.backward()
+            loss.backward()
                 # if not delay_unscale:
                 #     # gather gradients from every processes
                 #     # do this before unscaling to make sure every process uses
@@ -156,18 +157,18 @@ def main(opts):
                 lr_this_step = get_lr_sched(global_step, opts)
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = lr_this_step
-                TB_LOGGER.add_scalar('lr', lr_this_step, global_step)
+                #TB_LOGGER.add_scalar('lr', lr_this_step, global_step)
 
                 # log loss
                 #losses = all_gather_list(running_loss)
-                TB_LOGGER.add_scalar('loss', running_loss.val, global_step)
-                TB_LOGGER.step()
+                #TB_LOGGER.add_scalar('loss', running_loss.val, global_step)
+                #TB_LOGGER.step()
 
                 # update model params
-                if opts.grad_norm != -1:
-                    grad_norm = clip_grad_norm_(amp.master_params(optimizer),
-                                                opts.grad_norm)
-                    TB_LOGGER.add_scalar('grad_norm', grad_norm, global_step)
+                # if opts.grad_norm != -1:
+                #     grad_norm = clip_grad_norm_(amp.master_params(optimizer),
+                #                                 opts.grad_norm)
+                    #TB_LOGGER.add_scalar('grad_norm', grad_norm, global_step)
                 optimizer.step()
                 optimizer.zero_grad()
                 pbar.update(1)
@@ -178,8 +179,9 @@ def main(opts):
                     ex_per_sec = int(tot_ex / (time()-start))
                     LOGGER.info(f'Step {global_step}: '
                                 f'{tot_ex} examples trained at '
-                                f'{ex_per_sec} ex/s')
-                    TB_LOGGER.add_scalar('perf/ex_per_s',
+                                f'{ex_per_sec} ex/s '
+                                f'loss {running_loss.val}')
+                    #TB_LOGGER.add_scalar('perf/ex_per_s',
                                          ex_per_sec, global_step)
 
                 if global_step % opts.valid_steps == 0:
