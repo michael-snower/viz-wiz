@@ -107,7 +107,7 @@ class VizWizModel(UniterPreTrainedModel):
             key=hidden_state,
             value=hidden_state
         )
-        answerable_pool = self.answerable_pool(answerable_attn, inverse_attn_masks)
+        answerable_pool = self.answerable_pool(answerable_attn)
         answerable_logits = self.answerable_output(answerable_pool)
 
         if compute_loss is True:

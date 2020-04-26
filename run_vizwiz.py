@@ -198,7 +198,6 @@ def validate(model, val_loader):
         attn_masks = batch["attn_masks"].to(DEVICE)
         position_ids = batch["position_ids"].to(DEVICE)
         answerable_targets = batch["answerables"].to(DEVICE)
-        n_examples += input_ids.size(0)
 
         scores = model(
             input_ids=input_ids,
@@ -207,13 +206,12 @@ def validate(model, val_loader):
             attn_masks=attn_masks,
             gather_index=None,
             answerable_targets=None,
-            compute_loss=True
+            compute_loss=False
         )
 
         preds = torch.argmax(scores, dim=1)
-        bp()
         num_correct = (preds == answerable_targets).sum()
-        total_num_correct += num_correct
+        total_num_correct += num_correct.item()
 
         total_n_ex += len(scores)
 
