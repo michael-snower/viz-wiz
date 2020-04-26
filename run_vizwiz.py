@@ -31,6 +31,8 @@ from utils.save import ModelSaver, save_training_meta
 from utils.misc import NoOp, parse_with_config, set_dropout, set_random_seed
 from utils.const import IMG_DIM
 
+from pdb import set_trace as bp
+
 
 def main(opts):
 

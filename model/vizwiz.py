@@ -13,6 +13,8 @@ from .attention import MultiheadAttention
 from utils.const import PAD_TOKEN
 from utils.logger import LOGGER
 
+from pdb import set_trace as bp
+
 
 def count_trainable_params(mod):
     return sum([p.numel() for p in mod.parameters() if p.requires_grad is True])
@@ -84,11 +86,16 @@ class VizWizModel(UniterPreTrainedModel):
                 attn_masks, gather_index, answerable_targets,
                 img_type_ids=None, img_pos_feat=None, compute_loss=True):
 
-        sequence_output = self.uniter(input_ids, position_ids,
-                                      img_feat, img_pos_feat,
-                                      attn_masks, gather_index,
-                                      output_all_encoded_layers=False,
-                                      img_type_ids=img_type_ids)
+        sequence_output = self.uniter(
+            input_ids=input_ids, 
+            position_ids=position_ids,
+            img_feat=img_feat, 
+            img_pos_feat=img_pos_feat,
+            attention_mask=attn_masks, 
+            gather_index=gather_index,
+            output_all_encoded_layers=False,
+            img_type_ids=img_type_ids
+        )
 
         hidden_state = self.fc1(sequence_output)
         hidden_state = self.fc2(hidden_state)
