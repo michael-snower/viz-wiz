@@ -250,6 +250,7 @@ class UniterTextEmbeddings(nn.Module):
 class UniterImageEmbeddings(nn.Module):
     def __init__(self, config, img_dim):
         super().__init__()
+        self._img_linear = nn.Linear(1024, img_dim)
         self.img_linear = nn.Linear(img_dim, config.hidden_size)
         self.img_layer_norm = FusedLayerNorm(config.hidden_size, eps=1e-12)
         self.pos_layer_norm = FusedLayerNorm(config.hidden_size, eps=1e-12)
@@ -260,9 +261,11 @@ class UniterImageEmbeddings(nn.Module):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, img_feat, img_pos_feat, type_embeddings):
-        transformed_im = self.img_layer_norm(self.img_linear(img_feat))
-        transformed_pos = self.pos_layer_norm(self.pos_linear(img_pos_feat))
-        embeddings = transformed_im + transformed_pos + type_embeddings
+        _img_feat = self._img_linear(img_feat)
+        transformed_im = self.img_layer_norm(self.img_linear(_img_feat))
+        #transformed_pos = self.pos_layer_norm(self.pos_linear(img_pos_feat))
+        #embeddings = transformed_im + transformed_pos + type_embeddings
+        embeddings transformed_im 
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
@@ -323,15 +326,18 @@ class UniterModel(UniterPreTrainedModel):
         img_emb = self._compute_img_embeddings(
             img_feat, img_pos_feat, img_type_ids)
         # align back to most compact input
-        gather_index = gather_index.unsqueeze(-1).expand(
-            -1, -1, self.config.hidden_size)
-        embedding_output = torch.gather(torch.cat([txt_emb, img_emb], dim=1),
-                                        dim=1, index=gather_index)
+        if gather_index is not None:
+            gather_index = gather_index.unsqueeze(-1).expand(
+                -1, -1, self.config.hidden_size)
+            embedding_output = torch.gather(torch.cat([txt_emb, img_emb], dim=1),
+                                            dim=1, index=gather_index)
+        else:
+            embedding_output = torch.cat([txt_emb, img_emb], dim=1)
         return embedding_output
 
     def forward(self, input_ids, position_ids,
-                img_feat, img_pos_feat,
-                attention_mask, gather_index=None,
+                img_feat,
+                attention_mask, img_pos_feat=None, gather_index=None,
                 output_all_encoded_layers=True,
                 txt_type_ids=None, img_type_ids=None):
         # compute self-attention mask

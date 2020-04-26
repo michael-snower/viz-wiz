@@ -96,7 +96,7 @@ def process_vizwiz(ann, tokenizer, image_dir, output_dir):
         visual_features, vis = extract_visual_features(img, visual_model)
         vis_feat_save_path = os.path.join(visual_features_dir, img_name + ".npy")
         np.save(open(vis_feat_save_path, "wb"), visual_features)
-        cv.imwrite(img_name_with_ext, vis)
+        #cv.imwrite(img_name_with_ext, vis)
 
         # tokenize question
         question_tokens = tokenizer(example["question"])
@@ -119,8 +119,10 @@ def process_vizwiz(ann, tokenizer, image_dir, output_dir):
             answers_tok_np[0][1] = 1
         elif answer_type == "other":
             answers_tok_np[0][1] = 2
+        elif answer_type == "number":
+            answers_tok_np[0][1] = 3
         else:
-            raise ValueError("Unidentified answer type")
+            raise ValueError(f"Unidentified answer type {answer_type}")
         for answer_tok, row_index in zip(answers_tok, range(1, len(answers_tok_np))):
             answers_tok_np[row_index, :len(answer_tok)] = answer_tok
         answer_tok_save_path = os.path.join(answer_tokens_dir, img_name + ".npy")
