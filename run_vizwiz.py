@@ -116,11 +116,11 @@ def main(opts):
 
         for step, batch in enumerate(train_dataloader):
 
-            input_ids = batch['qs_tok']
-            img_feats = batch["img_feats"]
-            attn_masks = batch["attn_masks"]
-            position_ids = batch["position_ids"]
-            answerable_targets = batch["answerables"]
+            input_ids = batch['qs_tok'].to(device)
+            img_feats = batch["img_feats"].to(device)
+            attn_masks = batch["attn_masks"].to(device)
+            position_ids = batch["position_ids"].to(device)
+            answerable_targets = batch["answerables"].to(device)
             n_examples += input_ids.size(0)
 
             loss = model(

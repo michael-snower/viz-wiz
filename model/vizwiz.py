@@ -102,7 +102,12 @@ class VizWizModel(UniterPreTrainedModel):
 
         # answerable head
         inverse_attn_masks = attn_masks == 0
-        answerable_attention = self.answerable_attn(hidden_state, inverse_attn_masks)
+        answerable_attention = self.answerable_attn(
+            query=hidden_state, 
+            key=hidden_state,
+            value=hidden_state,
+            key_padding_mask=inverse_attn_masks
+        )
         answerable_pool = self.answerable_pool(answerable_attn, inverse_attn_masks)
         answerable_logits = self.answerable_output(answerable_pool)
 
