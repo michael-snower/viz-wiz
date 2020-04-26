@@ -33,10 +33,10 @@ from utils.const import IMG_DIM
 
 from pdb import set_trace as bp
 
+DEVICE = torch.device("cuda")
 
 def main(opts):
 
-    device = torch.device("cuda")
     LOGGER.info(
         "16-bits training: {}".format(opts.fp16))
 
@@ -77,7 +77,7 @@ def main(opts):
     model = VizWizModel.from_pretrained(opts.model_config, state_dict=checkpoint,
                                      img_dim=IMG_DIM)
     model.init_type_embedding()
-    model.to(device)
+    model.to(DEVICE)
     # make sure every process has same model parameters in the beginning\
     set_dropout(model, opts.dropout)
 
@@ -114,11 +114,11 @@ def main(opts):
 
         for step, batch in enumerate(train_dataloader):
 
-            input_ids = batch['qs_tok'].to(device)
-            img_feats = batch["img_feats"].to(device)
-            attn_masks = batch["attn_masks"].to(device)
-            position_ids = batch["position_ids"].to(device)
-            answerable_targets = batch["answerables"].to(device)
+            input_ids = batch['qs_tok'].to(DEVICE)
+            img_feats = batch["img_feats"].to(DEVICE)
+            attn_masks = batch["attn_masks"].to(DEVICE)
+            position_ids = batch["position_ids"].to(DEVICE)
+            answerable_targets = batch["answerables"].to(DEVICE)
             n_examples += input_ids.size(0)
 
             loss = model(
@@ -193,11 +193,11 @@ def validate(model, val_loader):
 
     for i, batch in enumerate(val_loader):
 
-        input_ids = batch['qs_tok'].to(device)
-        img_feats = batch["img_feats"].to(device)
-        attn_masks = batch["attn_masks"].to(device)
-        position_ids = batch["position_ids"].to(device)
-        answerable_targets = batch["answerables"].to(device)
+        input_ids = batch['qs_tok'].to(DEVICE)
+        img_feats = batch["img_feats"].to(DEVICE)
+        attn_masks = batch["attn_masks"].to(DEVICE)
+        position_ids = batch["position_ids"].to(DEVICE)
+        answerable_targets = batch["answerables"].to(DEVICE)
         n_examples += input_ids.size(0)
 
         scores = model(
