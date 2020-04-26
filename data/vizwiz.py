@@ -92,8 +92,7 @@ def vizwiz_collate(inputs):
     attn_padding = torch.ones((len(attn_masks), img_feats.shape[1]), dtype=torch.long)
     attn_masks = torch.cat([attn_masks, attn_padding], dim=1)
 
-    position_ids = torch.arange(0, qs_tok.size(1), dtype=torch.long
-                                ).unsqueeze(0)
+    position_ids = torch.arange(0, qs_tok.size(1), dtype=torch.long)
     position_ids = torch.stack(
         [torch.stack([position_ids] * len(img_feats), dim=0)] * qs_tok.shape[1],
         dim=1
