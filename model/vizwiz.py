@@ -10,7 +10,9 @@ from torch.nn import functional as F
 
 from .model import UniterPreTrainedModel, UniterModel
 from .attention import MultiheadAttention
-from .utils.const import PAD_TOKEN
+from utils.const import PAD_TOKEN
+from utils.logger import LOGGER
+
 
 def count_trainable_params(mod):
     return sum([p.numel() for p in mod.parameters() if p.requires_grad is True])
@@ -34,7 +36,7 @@ class AttentionPool(nn.Module):
         return output
 
 
-class UniterForVizWiz(UniterPreTrainedModel):
+class VizWizModel(UniterPreTrainedModel):
     """ Finetune UNITER for NLVR2
         (paired format with additional attention layer)
     """

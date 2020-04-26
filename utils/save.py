@@ -15,8 +15,8 @@ from utils.logger import LOGGER
 
 
 def save_training_meta(args):
-    if args.rank > 0:
-        return
+    # if args.rank > 0:
+    #     return
 
     if not exists(args.output_dir):
         os.makedirs(join(args.output_dir, 'log'))

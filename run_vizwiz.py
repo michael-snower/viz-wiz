@@ -20,6 +20,7 @@ from horovod import torch as hvd
 from tqdm import tqdm
 
 from data.vizwiz import VizWizDataset, vizwiz_collate
+from model.vizwiz import VizWizModel
 from optim import get_lr_sched
 from optim.misc import build_optimizer
 
@@ -35,9 +36,7 @@ def main(opts):
 
     device = torch.device("cuda")
     LOGGER.info(
-        "device: {}", "16-bits training: {}".format(
-            device, opts.fp16
-    ))
+        "16-bits training: {}".format(opts.fp16))
 
     if opts.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, "
@@ -49,22 +48,22 @@ def main(opts):
     LOGGER.info("Loading data from {}".format(opts.data_dir))
 
     # create datasets
-    train_set = VizWizDataset(train_data_dir, split="train")
-    val_set = VizWizDataset(val_data_dir, split="val")
+    train_set = VizWizDataset(opts.data_dir, split="train")
+    val_set = VizWizDataset(opts.data_dir, split="val")
 
     # data loaders
     train_dataloader = DataLoader(
         train_set,
         shuffle=True,
         batch_size=opts.train_batch_size,
-        num_workers=opts.num_workers,
+        num_workers=opts.n_workers,
         collate_fn=vizwiz_collate
     )
     val_dataloader = DataLoader(
         val_set,
         shuffle=False,
         batch_size=opts.train_batch_size,
-        num_workers=opts.num_workers,
+        num_workers=opts.n_workers,
         collate_fn=vizwiz_collate
     )
 
@@ -90,11 +89,12 @@ def main(opts):
     TB_LOGGER.create(join(opts.output_dir, 'log'))
     pbar = tqdm(total=opts.num_train_steps)
     model_saver = ModelSaver(join(opts.output_dir, 'ckpt'))
-    os.makedirs(join(opts.output_dir, 'results'))  # store val predictions
+    if not os.path.exists(join(opts.output_dir, 'results')):
+        os.makedirs(join(opts.output_dir, 'results'))
     add_log_to_file(join(opts.output_dir, 'log', 'log.txt'))
 
 
-    LOGGER.info(f"***** Running training with {n_gpu} GPUs *****")
+    LOGGER.info(f"***** Running training *****")
     LOGGER.info("  Num examples = %d", len(train_dataloader.dataset))
     LOGGER.info("  Batch size = %d", opts.train_batch_size)
     LOGGER.info("  Accumulate steps = %d", opts.gradient_accumulation_steps)

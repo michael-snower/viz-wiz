@@ -34,7 +34,7 @@ class VizWizDataset(Dataset):
         self.pre_q_tok_dir = os.path.join(self.pre_dir, "question_tokens")
         self.pre_ans_tok_dir = os.path.join(self.pre_dir, "answer_tokens")
 
-        LOGGER.info("Created {} set with {} examples".format(split, len(self)))
+        LOGGER.info("Created {} set with {:,d} examples".format(split, len(self)))
 
     def __len__(self):
         return len(self.img_names)
@@ -51,7 +51,7 @@ class VizWizDataset(Dataset):
         attn_mask = np.ones_like(q_tok, dtype=np.int32)
 
         pre_ans_tok_path = os.path.join(self.pre_ans_tok_dir, img_name + ".npy")
-        ans_tok = np.load(ans_tok)
+        ans_tok = np.load(pre_ans_tok_path)
         answerable = ans_tok[0][0]
         answer_type = ans_tok[0][1]
         answers = ans_tok[1:, :]
