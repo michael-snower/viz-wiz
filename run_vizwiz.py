@@ -19,7 +19,7 @@ from horovod import torch as hvd
 
 from tqdm import tqdm
 
-from data import VizWizDataset, vizwiz_collate
+from data.vizwiz import VizWizDataset, vizwiz_collate
 from optim import get_lr_sched
 from optim.misc import build_optimizer
 
@@ -261,7 +261,7 @@ if __name__ == "__main__":
     parser.add_argument("--model", default='answerable',
                         choices=['answerable'],
                         help="choose from model architecture")
-    paraser.add_argument("--predict_type", action="store_true")
+    parser.add_argument("--predict_type", action="store_true")
 
     parser.add_argument(
         "--output_dir", default=None, type=str,
@@ -345,9 +345,9 @@ if __name__ == "__main__":
 
     args = parse_with_config(parser)
 
-    if exists(args.output_dir) and os.listdir(args.output_dir):
-        raise ValueError("Output directory ({}) already exists and is not "
-                         "empty.".format(args.output_dir))
+    # if exists(args.output_dir) and os.listdir(args.output_dir):
+    #     raise ValueError("Output directory ({}) already exists and is not "
+    #                      "empty.".format(args.output_dir))
 
     if args.conf_th == -1:
         assert args.max_bb + args.max_txt_len + 2 <= 512

@@ -265,7 +265,7 @@ class UniterImageEmbeddings(nn.Module):
         transformed_im = self.img_layer_norm(self.img_linear(_img_feat))
         #transformed_pos = self.pos_layer_norm(self.pos_linear(img_pos_feat))
         #embeddings = transformed_im + transformed_pos + type_embeddings
-        embeddings transformed_im 
+        embeddings = transformed_im + type_embeddings
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
