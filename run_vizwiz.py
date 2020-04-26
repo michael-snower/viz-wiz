@@ -14,8 +14,8 @@ from torch.nn import functional as F
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 
-from apex import amp
-from horovod import torch as hvd
+#from apex import amp
+#from horovod import torch as hvd
 
 from tqdm import tqdm
 
@@ -83,12 +83,9 @@ def main(opts):
 
     # Prepare optimizer
     optimizer = build_optimizer(model, opts)
-    # model, optimizer = amp.initialize(model, optimizer,
-    #                                   enabled=opts.fp16, opt_level='O2')
 
     # setup logging
     save_training_meta(opts)
-    #TB_LOGGER.create(join(opts.output_dir, 'log'))
     pbar = tqdm(total=opts.num_train_steps)
     model_saver = ModelSaver(join(opts.output_dir, 'ckpt'))
     if not os.path.exists(join(opts.output_dir, 'results')):
@@ -135,18 +132,7 @@ def main(opts):
             )
             loss = loss.mean()
 
-            # delay_unscale = (step+1) % opts.gradient_accumulation_steps != 0
-            # with amp.scale_loss(loss, optimizer, delay_unscale=delay_unscale
-            #                     ) as scaled_loss:
-            #     scaled_loss.backward()
             loss.backward()
-                # if not delay_unscale:
-                #     # gather gradients from every processes
-                #     # do this before unscaling to make sure every process uses
-                #     # the same gradient scale
-                #     grads = [p.grad.data for p in model.parameters()
-                #              if p.requires_grad and p.grad is not None]
-                    #all_reduce_and_rescale_tensors(grads, float(1))
 
             running_loss(loss.item())
 
@@ -157,18 +143,7 @@ def main(opts):
                 lr_this_step = get_lr_sched(global_step, opts)
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = lr_this_step
-                #TB_LOGGER.add_scalar('lr', lr_this_step, global_step)
 
-                # log loss
-                #losses = all_gather_list(running_loss)
-                #TB_LOGGER.add_scalar('loss', running_loss.val, global_step)
-                #TB_LOGGER.step()
-
-                # update model params
-                # if opts.grad_norm != -1:
-                #     grad_norm = clip_grad_norm_(amp.master_params(optimizer),
-                #                                 opts.grad_norm)
-                    #TB_LOGGER.add_scalar('grad_norm', grad_norm, global_step)
                 optimizer.step()
                 optimizer.zero_grad()
                 pbar.update(1)
@@ -181,8 +156,6 @@ def main(opts):
                                 f'{tot_ex} examples trained at '
                                 f'{ex_per_sec} ex/s '
                                 f'loss {running_loss.val}')
-                    #TB_LOGGER.add_scalar('perf/ex_per_s',
-                                         ex_per_sec, global_step)
 
                 if global_step % opts.valid_steps == 0:
 
@@ -190,7 +163,7 @@ def main(opts):
                         f"Step {global_step}: start running "
                         f"evaluation on val..."
                     )
-                    log, results = validate(model, val_dataloader)
+                    validate(model, val_dataloader)
                     model_saver.save(model, global_step)
 
             if global_step >= opts.num_train_steps:
@@ -206,46 +179,51 @@ def main(opts):
         f"Step {global_step}: start running "
         f"evaluation on val..."
     )
-    log, results = validate(model, val_dataloader)
+    validate(model, val_dataloader)
     model_saver.save(model, f'{global_step}_final')
 
 
 @torch.no_grad()
 def validate(model, val_loader):
+
     model.eval()
-    val_loss = 0
-    tot_score = 0
-    n_ex = 0
+    total_num_correct = 0
+    total_n_ex = 0
     st = time()
-    results = []
+
     for i, batch in enumerate(val_loader):
-        qids = batch['qids']
-        targets = batch['targets']
-        del batch['targets']
-        del batch['qids']
-        scores = model(**batch, targets=None, compute_loss=False)
-        loss = F.cross_entropy(scores, targets, reduction='sum')
-        val_loss += loss.item()
-        tot_score += (scores.max(dim=-1, keepdim=False)[1] == targets
-                      ).sum().item()
-        answers = ['True' if i == 1 else 'False'
-                   for i in scores.max(dim=-1, keepdim=False
-                                       )[1].cpu().tolist()]
-        results.extend(zip(qids, answers))
-        n_ex += len(qids)
-    val_loss = sum(all_gather_list(val_loss))
-    tot_score = sum(all_gather_list(tot_score))
-    n_ex = sum(all_gather_list(n_ex))
+
+        input_ids = batch['qs_tok'].to(device)
+        img_feats = batch["img_feats"].to(device)
+        attn_masks = batch["attn_masks"].to(device)
+        position_ids = batch["position_ids"].to(device)
+        answerable_targets = batch["answerables"].to(device)
+        n_examples += input_ids.size(0)
+
+        scores = model(
+            input_ids=input_ids,
+            position_ids=position_ids,
+            img_feat=img_feats, 
+            attn_masks=attn_masks,
+            gather_index=None,
+            answerable_targets=None,
+            compute_loss=True
+        )
+
+        preds = torch.argmax(scores, dim=1)
+        bp()
+        num_correct = (preds == answerable_targets).sum()
+        total_num_correct += num_correct
+
+        total_n_ex += len(scores)
+
     tot_time = time()-st
-    val_loss /= n_ex
-    val_acc = tot_score / n_ex
-    val_log = {f'valid/{split}_loss': val_loss,
-               f'valid/{split}_acc': val_acc,
-               f'valid/{split}_ex_per_s': n_ex/tot_time}
-    model.train()
+    val_acc = total_num_correct / total_n_ex
     LOGGER.info(f"validation finished in {int(tot_time)} seconds, "
-                f"score: {val_acc*100:.2f}")
-    return val_log, results
+                f"accuracy: {val_acc*100:.2f}")
+
+    model.train()
+
 
 
 if __name__ == "__main__":

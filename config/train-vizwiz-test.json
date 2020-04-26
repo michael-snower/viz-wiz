@@ -26,6 +26,6 @@
     "warmup_steps": 800,
     "seed": 77,
     "fp16": true,
-    "n_workers": 0,
+    "n_workers": 4,
     "pin_mem": true
 }
