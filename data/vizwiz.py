@@ -22,12 +22,11 @@ class VizWizDataset(Dataset):
         self.split = split
 
         self.img_dir = os.path.join(self.data_dir, "img", self.split)
-        self.ann_dir = os.path.join(self.data_dir, "ann", self.split)
+        self.ann_path = os.path.join(self.data_dir, "ann", f"{split}.json")
 
-        self.img_names = [
-            img_name_with_ext.split(".")[0]
-            for img_name_with_ext in os.listdir(self.img_dir)
-        ]
+        with open(self.ann_path, "r") as ann_file:
+            anns = json.load(ann_file)
+            self.img_names = [ann["image"].split(".")[0] for ann in anns]
 
         self.pre_dir = os.path.join(self.data_dir, "pre", self.split)
         self.pre_vis_feat_dir = os.path.join(self.pre_dir, "visual_features")
@@ -55,16 +54,21 @@ class VizWizDataset(Dataset):
         answerable = ans_tok[0][0]
         answer_type = ans_tok[0][1]
         answers = ans_tok[1:, :]
-        bp()
         pad_mask = answers == -1
         answers[pad_mask] = PAD_TOKEN
 
         return img_name, img_feat, q_tok, attn_mask, answers, answerable, answer_type
 
 
-def vizwiz_collate(*inputs):
-    
-    img_names, img_feats, qs_tok, attn_masks, answers_tok, answerables, answers_type = inputs
+def vizwiz_collate(inputs):
+
+    img_names = [inp[0] for inp in inputs]
+    img_feats = [inp[1] for inp in inputs]
+    qs_tok = [inp[2] for inp in inputs]
+    attn_masks = [inp[3] for inp in inputs]
+    answers_tok = [inp[4] for inp in inputs]
+    answerables = [inp[5] for inp in inputs]
+    answers_type = [inp[6] for inp in inputs]
 
     max_num_feats = max([len(img_feat) for img_feat in img_feats])
     all_feat = []
@@ -76,14 +80,16 @@ def vizwiz_collate(*inputs):
         padding = torch.zeros((num_diff, img_feat_dim), dtype=torch.float32)
         img_feat = torch.cat([img_feat, padding], dim=0)
         all_feat.append(img_feat)
-    img_feats = torch.FloatTensor(all_feat)
+    img_feats = torch.stack(all_feat, dim=0).float()
 
-    qs_tok = torch.LongTensor(qs_tok)
-    qs_tok = pad_sequence(qs_tok, batch_first=True, padding_value=PAD_TOKEN)
+    qs_tok = pad_sequence([torch.LongTensor(q_tok) for q_tok in qs_tok], batch_first=True)
 
-    attn_masks = torch.LongTensor(attn_masks)
-    attn_masks = pad_sequence(attn_masks, batch_first=True, padding_value=0)
-    attn_padding = torch.ones((len(attn_masks), img_feats.shape[1]), dtype=torch.int32)
+    attn_masks = pad_sequence(
+        [torch.LongTensor(attn_mask) for attn_mask in attn_masks], 
+        batch_first=True, 
+        padding_value=0
+    )
+    attn_padding = torch.ones((len(attn_masks), img_feats.shape[1]), dtype=torch.long)
     attn_masks = torch.cat([attn_masks, attn_padding], dim=1)
 
     position_ids = torch.arange(0, qs_tok.size(1), dtype=torch.long
@@ -95,12 +101,12 @@ def vizwiz_collate(*inputs):
     for answer_tok in answers_tok:
         answer_len = answer_tok.shape[1]
         len_diff = max_answer_len - answer_len
-        answer_feat = torch.FloatTensor(answer_feat)
-        num_answers = len(answer_feat)
-        padding = torch.ones((num_answers, len_diff), dtype=torch.float32) * PAD_TOKEN
+        answer_tok = torch.LongTensor(answer_tok)
+        num_answers = len(answer_tok)
+        padding = torch.ones((num_answers, len_diff), dtype=torch.long) * PAD_TOKEN
         answer_tok = torch.cat([answer_tok, padding], dim=1)
         all_answers.append(answer_tok)
-    answers_tok = torch.LongTensor(all_answers)
+    answers_tok = torch.stack(all_answers, dim=0).long()
 
     answerables = torch.LongTensor(answerables)
 
