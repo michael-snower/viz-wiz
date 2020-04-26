@@ -93,10 +93,7 @@ def vizwiz_collate(inputs):
     attn_masks = torch.cat([attn_masks, attn_padding], dim=1)
 
     position_ids = torch.arange(0, qs_tok.size(1), dtype=torch.long)
-    position_ids = torch.stack(
-        [torch.stack([position_ids] * len(img_feats), dim=0)] * qs_tok.shape[1],
-        dim=1
-    ).squeeze()
+    position_ids = torch.stack([position_ids] * len(img_feats), dim=0)
 
     all_answers = []
     max_answer_len = max([answer_tok.shape[1] for answer_tok in answers_tok])

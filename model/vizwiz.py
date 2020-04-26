@@ -102,17 +102,16 @@ class VizWizModel(UniterPreTrainedModel):
 
         # answerable head
         inverse_attn_masks = attn_masks == 0
-        answerable_attention = self.answerable_attn(
+        answerable_attn, _ = self.answerable_attn(
             query=hidden_state, 
             key=hidden_state,
-            value=hidden_state,
-            key_padding_mask=inverse_attn_masks
+            value=hidden_state
         )
         answerable_pool = self.answerable_pool(answerable_attn, inverse_attn_masks)
         answerable_logits = self.answerable_output(answerable_pool)
 
         if compute_loss is True:
-            answerable_loss = self.answer_loss(answerable_logits, answerable_targets)
+            answerable_loss = self.answerable_loss(answerable_logits, answerable_targets)
             return answerable_loss
         else:
             return answerable_logits

@@ -107,6 +107,7 @@ def main(opts):
     n_examples = 0
     n_epoch = 0
     start = time()
+    global_step = 0
 
     # quick hack for amp delay_unscale bug
     optimizer.zero_grad()
@@ -138,13 +139,13 @@ def main(opts):
             with amp.scale_loss(loss, optimizer, delay_unscale=delay_unscale
                                 ) as scaled_loss:
                 scaled_loss.backward()
-                if not delay_unscale:
-                    # gather gradients from every processes
-                    # do this before unscaling to make sure every process uses
-                    # the same gradient scale
-                    grads = [p.grad.data for p in model.parameters()
-                             if p.requires_grad and p.grad is not None]
-                    all_reduce_and_rescale_tensors(grads, float(1))
+                # if not delay_unscale:
+                #     # gather gradients from every processes
+                #     # do this before unscaling to make sure every process uses
+                #     # the same gradient scale
+                #     grads = [p.grad.data for p in model.parameters()
+                #              if p.requires_grad and p.grad is not None]
+                    #all_reduce_and_rescale_tensors(grads, float(1))
 
             running_loss(loss.item())
 
@@ -158,9 +159,7 @@ def main(opts):
                 TB_LOGGER.add_scalar('lr', lr_this_step, global_step)
 
                 # log loss
-                losses = all_gather_list(running_loss)
-                running_loss = RunningMeter(
-                    'loss', sum(l.val for l in losses)/len(losses))
+                #losses = all_gather_list(running_loss)
                 TB_LOGGER.add_scalar('loss', running_loss.val, global_step)
                 TB_LOGGER.step()
 
@@ -175,7 +174,7 @@ def main(opts):
 
                 if global_step % 100 == 0:
                     # monitor training throughput
-                    tot_ex = sum(all_gather_list(n_examples))
+                    tot_ex = n_examples
                     ex_per_sec = int(tot_ex / (time()-start))
                     LOGGER.info(f'Step {global_step}: '
                                 f'{tot_ex} examples trained at '
