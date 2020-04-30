@@ -9,6 +9,7 @@ import os
 from os.path import exists, join
 from time import time
 
+import numpy as np
 import torch
 from torch.nn import functional as F
 from torch.nn.utils import clip_grad_norm_
@@ -120,6 +121,7 @@ def main(opts):
             attn_masks = batch["attn_masks"].to(DEVICE)
             position_ids = batch["position_ids"].to(DEVICE)
             answerable_targets = batch["answerables"].to(DEVICE)
+            answer_targets = batch["answers_tok"].to(DEVICE)
             n_examples += input_ids.size(0)
 
             loss = model(
@@ -129,6 +131,7 @@ def main(opts):
                 attn_masks=attn_masks,
                 gather_index=None,
                 answerable_targets=answerable_targets,
+                answer_targets=answer_targets,
                 compute_loss=True
             )
             loss = loss.mean()
@@ -201,6 +204,7 @@ def validate(model, val_loader):
         attn_masks = batch["attn_masks"].to(DEVICE)
         position_ids = batch["position_ids"].to(DEVICE)
         answerable_targets = batch["answerables"].to(DEVICE)
+        answer_targets = batch["answers_tok"].to(DEVICE)
 
         answerable_scores = model(
             input_ids=input_ids,
@@ -216,11 +220,11 @@ def validate(model, val_loader):
         num_correct = (answerable_preds == answerable_targets).sum()
         total_num_correct += num_correct.item()
 
-        answerable_probs = F.softmax(answerable_preds, dim=-1)[:, 1]
+        answerable_probs = F.softmax(answerable_scores, dim=-1)[:, 1]
         all_answerable_probs.extend(answerable_probs.cpu().numpy().tolist())
         all_answerable_labels.extend(answerable_targets.cpu().numpy().tolist())
 
-        total_n_ex += len(scores)
+        total_n_ex += len(answerable_scores)
 
     tot_time = time()-st
     val_acc = total_num_correct / total_n_ex
@@ -231,8 +235,8 @@ def validate(model, val_loader):
     )
 
     LOGGER.info(f"validation finished in {int(tot_time)} seconds, "
-                f"accuracy: {val_acc*100:.2f}"
-                f"AP: {answerable_ap:.2f}"
+                f"accuracy: {val_acc*100:.2f} " 
+                f"AP: {answerable_ap:.4f}"
     )
 
     model.train()

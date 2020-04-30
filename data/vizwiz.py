@@ -96,12 +96,14 @@ def vizwiz_collate(inputs):
     position_ids = torch.stack([position_ids] * len(img_feats), dim=0)
 
     all_answers = []
-    max_answer_len = max([answer_tok.shape[1] for answer_tok in answers_tok])
+    max_answer_len = img_feats.shape[1]
     for answer_tok in answers_tok:
         answer_len = answer_tok.shape[1]
         len_diff = max_answer_len - answer_len
+        assert len_diff > 0
         answer_tok = torch.LongTensor(answer_tok)
         num_answers = len(answer_tok)
+        assert num_answers == 12
         padding = torch.ones((num_answers, len_diff), dtype=torch.long) * PAD_TOKEN
         answer_tok = torch.cat([answer_tok, padding], dim=1)
         all_answers.append(answer_tok)
