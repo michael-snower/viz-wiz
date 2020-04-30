@@ -11,7 +11,7 @@ from time import time
 
 import numpy as np
 import torch
-import cv2 as cvanswerable_scores
+import cv2 as cv
 from torch.nn import functional as F
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
@@ -231,14 +231,15 @@ def validate(model, val_loader):
         answerable_preds = torch.argmax(answerable_scores, dim=-1)
         num_correct = (answerable_preds == answerable_targets).sum()
         total_num_answerable_correct += num_correct.item()
+        probs = F.softmax(answerable_scores, dim=-1)
 
         if i < 10:
             image_names = batch["img_names"]
-            for j, (name, pred, score) in enumerate(zip(image_names, answerable_preds.cpu(), answerable_scores.cpu())):
-                img_path = os.path.join(args.data_dir, "images", "valid", name)
+            for j, (name, pred, prob) in enumerate(zip(image_names, answerable_preds.cpu(), probs.cpu())):
+                img_path = os.path.join(args.data_dir, "img", "val", name + ".jpg")
                 img = cv.imread(img_path)
 
-                pred_score = score[pred]
+                pred_score = prob[pred]
                 msg = ""
                 if pred == 0:
                     msg += "Unanswerable"
@@ -246,7 +247,7 @@ def validate(model, val_loader):
                     msg += "Answerable"
                 msg += f" {pred_score:.2f}"
 
-                padding = np.zeros((50, img.shape[1]))
+                padding = np.zeros((50, img.shape[1], 3))
                 vis = np.concatenate([padding, img], axis=0)
 
                 cv.putText(vis, msg, (10, 10), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
