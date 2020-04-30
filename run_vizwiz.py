@@ -11,6 +11,7 @@ from time import time
 
 import numpy as np
 import torch
+import cv2 as cvanswerable_scores
 from torch.nn import functional as F
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
@@ -136,7 +137,7 @@ def main(opts):
                 compute_loss=True
             )
 
-            total_loss = answerable_loss + answer_loss
+            total_loss = answerable_loss
             total_loss.backward()
 
             running_answerable_loss(answerable_loss.item())
@@ -204,6 +205,10 @@ def validate(model, val_loader):
 
     st = time()
 
+    vis_dir = "vis"
+    if not os.path.exists(vis_dir):
+        os.mkdir(vis_dir)
+
     for i, batch in enumerate(val_loader):
 
         input_ids = batch['qs_tok'].to(DEVICE)
@@ -226,6 +231,28 @@ def validate(model, val_loader):
         answerable_preds = torch.argmax(answerable_scores, dim=-1)
         num_correct = (answerable_preds == answerable_targets).sum()
         total_num_answerable_correct += num_correct.item()
+
+        if i < 10:
+            image_names = batch["img_names"]
+            for j, (name, pred, score) in enumerate(zip(image_names, answerable_preds.cpu(), answerable_scores.cpu())):
+                img_path = os.path.join(args.data_dir, "images", "valid", name)
+                img = cv.imread(img_path)
+
+                pred_score = score[pred]
+                msg = ""
+                if pred == 0:
+                    msg += "Unanswerable"
+                else:
+                    msg += "Answerable"
+                msg += f" {pred_score:.2f}"
+
+                padding = np.zeros((50, img.shape[1]))
+                vis = np.concatenate([padding, img], axis=0)
+
+                cv.putText(vis, msg, (10, 10), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
+
+                vis_path = os.path.join(vis_dir, str(i) + "_" + str(j) + ".png")
+                cv.imwrite(vis_path, vis)
 
         answerable_probs = F.softmax(answerable_scores, dim=-1)[:, 1]
         all_answerable_probs.extend(answerable_probs.cpu().numpy().tolist())
