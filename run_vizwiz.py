@@ -23,6 +23,7 @@ from data.vizwiz import VizWizDataset, vizwiz_collate
 from model.vizwiz import VizWizModel
 from optim import get_lr_sched
 from optim.misc import build_optimizer
+from sklearn.metrics import average_precision_score
 
 from utils.logger import LOGGER, TB_LOGGER, RunningMeter, add_log_to_file
 from utils.distributed import (all_reduce_and_rescale_tensors, all_gather_list,
@@ -189,6 +190,8 @@ def validate(model, val_loader):
     model.eval()
     total_num_correct = 0
     total_n_ex = 0
+    all_answerable_probs = []
+    all_answerable_labels = []
     st = time()
 
     for i, batch in enumerate(val_loader):
@@ -199,7 +202,7 @@ def validate(model, val_loader):
         position_ids = batch["position_ids"].to(DEVICE)
         answerable_targets = batch["answerables"].to(DEVICE)
 
-        scores = model(
+        answerable_scores = model(
             input_ids=input_ids,
             position_ids=position_ids,
             img_feat=img_feats, 
@@ -209,16 +212,28 @@ def validate(model, val_loader):
             compute_loss=False
         )
 
-        preds = torch.argmax(scores, dim=1)
-        num_correct = (preds == answerable_targets).sum()
+        answerable_preds = torch.argmax(answerable_scores, dim=1)
+        num_correct = (answerable_preds == answerable_targets).sum()
         total_num_correct += num_correct.item()
+
+        answerable_probs = F.softmax(answerable_preds, dim=-1)[:, 1]
+        all_answerable_probs.extend(answerable_probs.cpu().numpy().tolist())
+        all_answerable_labels.extend(answerable_targets.cpu().numpy().tolist())
 
         total_n_ex += len(scores)
 
     tot_time = time()-st
     val_acc = total_num_correct / total_n_ex
+
+    answerable_ap = average_precision_score(
+        np.array(all_answerable_labels), 
+        np.array(all_answerable_probs)
+    )
+
     LOGGER.info(f"validation finished in {int(tot_time)} seconds, "
-                f"accuracy: {val_acc*100:.2f}")
+                f"accuracy: {val_acc*100:.2f}"
+                f"AP: {answerable_ap:.2f}"
+    )
 
     model.train()
 
