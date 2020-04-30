@@ -119,11 +119,15 @@ class VizWizModel(UniterPreTrainedModel):
         if compute_loss is True:
             answerable_loss = self.answerable_loss(answerable_logits, answerable_targets)
 
-            answer_logits = torch.cat([answer_logits] * 10, dim=1)
             answer_logits = answer_logits.reshape(-1, self.vocab_size)
-            answer_targets = answer_targets.reshape(-1)
-            answer_loss = self.answer_loss(answer_logits, answer_targets)
+            total_answer_loss = 0
+            answer_targets = answer_targets.reshape(-1, 10)
+            for i in range(10):
+                answer_target = answer_targets[:, i]
+                answer_loss = self.answer_loss(answer_logits, answer_target)
+                total_answer_loss += answer_loss
+            total_answer_loss /= 10
 
-            return answerable_loss, answer_loss
+            return answerable_loss, total_answer_loss
         else:
             return answerable_logits, answer_logits

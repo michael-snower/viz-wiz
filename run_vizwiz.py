@@ -161,8 +161,8 @@ def main(opts):
                     LOGGER.info(f'Step {global_step}: '
                                 f'{tot_ex} examples trained at '
                                 f'{ex_per_sec} ex/s '
-                                f'answerable loss {running_answerable_loss.val} ' 
-                                f'answer loss {running_answer_loss.val}'
+                                f'answerable loss {running_answerable_loss.val:.4f} ' 
+                                f'answer loss {running_answer_loss.val:.4f}'
                     )
 
                 if global_step % opts.valid_steps == 0:
@@ -233,7 +233,7 @@ def validate(model, val_loader):
 
         answer_preds = torch.argmax(answer_scores, dim=-1).cpu()
         answer_stacked = torch.stack([answer_preds] * 10, dim=1)
-        answer_targets = answer_targets.reshape(args.val_batch_size, 10, -1)
+        answer_targets = answer_targets.reshape(len(answer_preds), 10, -1).cpu()
         tok_boolean = answer_stacked == answer_targets
         seq_sum = tok_boolean.sum(-1)
         seq_len = answer_targets.shape[-1]
@@ -242,7 +242,6 @@ def validate(model, val_loader):
         min_match = 3
         example_boolean = example_sum >= min_match
         total_num_answer_correct += example_boolean.sum().item()
-
 
         total_n_ex += len(answerable_scores)
 
