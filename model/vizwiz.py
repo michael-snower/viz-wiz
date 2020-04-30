@@ -113,17 +113,17 @@ class VizWizModel(UniterPreTrainedModel):
         answerable_logits = self.answerable_output(answerable_pool)
 
         # predict seq
-        answer_hidden = self.answer1(hidden_state)
+        answer_hidden = self.answer1(sequence_output)
         answer_logits = self.answer_output(answer_hidden)
 
         if compute_loss is True:
             answerable_loss = self.answerable_loss(answerable_logits, answerable_targets)
 
-            answer_logits = torch.cat([answer_logits] * 12, dim=0)
+            answer_logits = torch.cat([answer_logits] * 10, dim=1)
             answer_logits = answer_logits.reshape(-1, self.vocab_size)
-            answer_targets = answer_targets.reshape(-1, self.vocab_size)
+            answer_targets = answer_targets.reshape(-1)
             answer_loss = self.answer_loss(answer_logits, answer_targets)
 
-            return answerable_loss + answer_loss
+            return answerable_loss, answer_loss
         else:
             return answerable_logits, answer_logits

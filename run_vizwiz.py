@@ -101,7 +101,8 @@ def main(opts):
     LOGGER.info("  Accumulate steps = %d", opts.gradient_accumulation_steps)
     LOGGER.info("  Num steps = %d", opts.num_train_steps)
 
-    running_loss = RunningMeter('loss')
+    running_answerable_loss = RunningMeter('running_answerable_loss')
+    running_answer_loss = RunningMeter('running_answer_loss')
     model.train()
     n_examples = 0
     n_epoch = 0
@@ -124,7 +125,7 @@ def main(opts):
             answer_targets = batch["answers_tok"].to(DEVICE)
             n_examples += input_ids.size(0)
 
-            loss = model(
+            answerable_loss, answer_loss = model(
                 input_ids=input_ids,
                 position_ids=position_ids,
                 img_feat=img_feats, 
@@ -134,11 +135,12 @@ def main(opts):
                 answer_targets=answer_targets,
                 compute_loss=True
             )
-            loss = loss.mean()
 
-            loss.backward()
+            total_loss = answerable_loss + answer_loss
+            total_loss.backward()
 
-            running_loss(loss.item())
+            running_answerable_loss(answerable_loss.item())
+            running_answer_loss(answer_loss.item())
 
             if (step + 1) % opts.gradient_accumulation_steps == 0:
                 global_step += 1
@@ -159,7 +161,9 @@ def main(opts):
                     LOGGER.info(f'Step {global_step}: '
                                 f'{tot_ex} examples trained at '
                                 f'{ex_per_sec} ex/s '
-                                f'loss {running_loss.val}')
+                                f'answerable loss {running_answerable_loss.val} ' 
+                                f'answer loss {running_answer_loss.val}'
+                    )
 
                 if global_step % opts.valid_steps == 0:
 
@@ -191,10 +195,13 @@ def main(opts):
 def validate(model, val_loader):
 
     model.eval()
-    total_num_correct = 0
+    total_num_answerable_correct = 0
     total_n_ex = 0
     all_answerable_probs = []
     all_answerable_labels = []
+
+    total_num_answer_correct = 0
+
     st = time()
 
     for i, batch in enumerate(val_loader):
@@ -206,7 +213,7 @@ def validate(model, val_loader):
         answerable_targets = batch["answerables"].to(DEVICE)
         answer_targets = batch["answers_tok"].to(DEVICE)
 
-        answerable_scores = model(
+        answerable_scores, answer_scores = model(
             input_ids=input_ids,
             position_ids=position_ids,
             img_feat=img_feats, 
@@ -216,27 +223,43 @@ def validate(model, val_loader):
             compute_loss=False
         )
 
-        answerable_preds = torch.argmax(answerable_scores, dim=1)
+        answerable_preds = torch.argmax(answerable_scores, dim=-1)
         num_correct = (answerable_preds == answerable_targets).sum()
-        total_num_correct += num_correct.item()
+        total_num_answerable_correct += num_correct.item()
 
         answerable_probs = F.softmax(answerable_scores, dim=-1)[:, 1]
         all_answerable_probs.extend(answerable_probs.cpu().numpy().tolist())
         all_answerable_labels.extend(answerable_targets.cpu().numpy().tolist())
 
+        answer_preds = torch.argmax(answer_scores, dim=-1).cpu()
+        answer_stacked = torch.stack([answer_preds] * 10, dim=1)
+        answer_targets = answer_targets.reshape(args.val_batch_size, 10, -1)
+        tok_boolean = answer_stacked == answer_targets
+        seq_sum = tok_boolean.sum(-1)
+        seq_len = answer_targets.shape[-1]
+        seq_boolean = seq_sum == seq_len
+        example_sum = seq_boolean.sum(-1)
+        min_match = 3
+        example_boolean = example_sum >= min_match
+        total_num_answer_correct += example_boolean.sum().item()
+
+
         total_n_ex += len(answerable_scores)
 
     tot_time = time()-st
-    val_acc = total_num_correct / total_n_ex
+    answerable_acc = total_num_answerable_correct / total_n_ex
 
     answerable_ap = average_precision_score(
         np.array(all_answerable_labels), 
         np.array(all_answerable_probs)
     )
 
+    answer_acc = total_num_answer_correct / total_n_ex
+
     LOGGER.info(f"validation finished in {int(tot_time)} seconds, "
-                f"accuracy: {val_acc*100:.2f} " 
-                f"AP: {answerable_ap:.4f}"
+                f"answerable acc: {answerable_acc*100:.2f} " 
+                f"answerable AP: {answerable_ap:.4f} " 
+                f"answer acc {answer_acc*100:.2f}"
     )
 
     model.train()
