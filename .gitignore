@@ -1,6 +1,10 @@
 # ctags
 tags
 
+#vis
+vis/
+
+
 # data
 datasets/
 

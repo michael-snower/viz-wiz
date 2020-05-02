@@ -137,7 +137,7 @@ def main(opts):
                 compute_loss=True
             )
 
-            total_loss = answerable_loss
+            total_loss = answerable_loss + answer_loss
             total_loss.backward()
 
             running_answerable_loss(answerable_loss.item())
@@ -194,7 +194,10 @@ def main(opts):
 
 @torch.no_grad()
 def validate(model, val_loader):
-
+    '''
+    Evalutes the accuracy on Answerability and QA.
+    The Answerability code works, but the QA code has a bug.
+    '''
     model.eval()
     total_num_answerable_correct = 0
     total_n_ex = 0
@@ -250,7 +253,7 @@ def validate(model, val_loader):
                 padding = np.zeros((50, img.shape[1], 3))
                 vis = np.concatenate([padding, img], axis=0)
 
-                cv.putText(vis, msg, (10, 10), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
+                cv.putText(vis, msg, (10, 30), cv.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255))
 
                 vis_path = os.path.join(vis_dir, str(i) + "_" + str(j) + ".png")
                 cv.imwrite(vis_path, vis)
@@ -259,6 +262,7 @@ def validate(model, val_loader):
         all_answerable_probs.extend(answerable_probs.cpu().numpy().tolist())
         all_answerable_labels.extend(answerable_targets.cpu().numpy().tolist())
 
+        # the QA evaluation has a bug
         answer_preds = torch.argmax(answer_scores, dim=-1).cpu()
         answer_stacked = torch.stack([answer_preds] * 10, dim=1)
         answer_targets = answer_targets.reshape(len(answer_preds), 10, -1).cpu()
